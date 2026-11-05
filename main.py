@@ -3,12 +3,8 @@ import discord
 from discord.ext import commands
 
 # ========== CONFIGURACIÓN ==========
-
-TOKEN = "MTU2Nzc1NDQyNzA4NjAxNjU0Mg.GzDUPI.C-oyH_R1uTOoP0Vzzddjt-KjLbpC23HuPfA2Uc"
-
 TICKET_CATEGORY_ID = 0  # ID de la categoría donde irán los tickets
 STAFF_ROLE_ID = 0       # ID del rol de soporte
-
 # ===================================
 
 intents = discord.Intents.default()
@@ -16,8 +12,8 @@ intents.message_content = True
 
 
 class TicketCloseView(discord.ui.View):
-    def _init_(self):
-        super()._init_(timeout=None)
+    def __init__(self):
+        super().__init__(timeout=None)
 
     @discord.ui.button(
         label="Cerrar ticket",
@@ -69,7 +65,7 @@ class TicketCloseView(discord.ui.View):
 
 
 class TicketSelect(discord.ui.Select):
-    def _init_(self):
+    def __init__(self):
         options = [
             discord.SelectOption(
                 label="Soporte general",
@@ -97,14 +93,13 @@ class TicketSelect(discord.ui.Select):
             )
         ]
 
-        super()._init_(
+        super().__init__(
             placeholder="🎫 Selecciona una categoría...",
             options=options,
             custom_id="gumbot:ticket_select"
         )
 
     async def callback(self, interaction: discord.Interaction):
-
         guild = interaction.guild
         member = interaction.user
         tipo = self.values[0]
@@ -194,8 +189,8 @@ class TicketSelect(discord.ui.Select):
 
 
 class TicketPanel(discord.ui.View):
-    def _init_(self):
-        super()._init_(timeout=None)
+    def __init__(self):
+        super().__init__(timeout=None)
         self.add_item(TicketSelect())
 
 
@@ -220,7 +215,6 @@ async def on_ready():
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def panel(ctx):
-
     embed = discord.Embed(
         title="🍬 GUMBOT | Centro de soporte",
         description=(

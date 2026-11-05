@@ -1,10 +1,25 @@
 import os
+import threading
+from flask import Flask
 import discord
 from discord.ext import commands
 
+# ========== SERVIDOR WEB EN SEGUNDO PLANO (PARA RENDER GRATUITO) ==========
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "GUMBOT activo 24/7"
+
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+threading.Thread(target=run_web, daemon=True).start()
+
 # ========== CONFIGURACIÓN ==========
-TICKET_CATEGORY_ID = 0  # ID de la categoría donde irán los tickets
-STAFF_ROLE_ID = 0       # ID del rol de soporte
+TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría de tickets (ej: 1234567890)
+STAFF_ROLE_ID = 0       # Reemplaza por el ID del rol de soporte (ej: 1234567890)
 # ===================================
 
 intents = discord.Intents.default()

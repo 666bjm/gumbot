@@ -21,7 +21,7 @@ def run_web():
 threading.Thread(target=run_web, daemon=True).start()
 
 # ========== CONFIGURACIÓN DE IDS Y ROLES ==========
-TICKET_CATEGORY_ID = 0  # Reemplaza por la ID de la categoría si usas una
+TICKET_CATEGORY_ID = 0  # Coloca aquí la ID de la categoría si usas una
 
 MEMBER_ROLE_ID = 1566149617995874428
 OWNER_ROLE_ID  = 1566149617995874432
@@ -118,10 +118,13 @@ class TicketCloseView(discord.ui.View):
 
         # ========== GENERACIÓN DE TRANSCRIPCIÓN ==========
         messages = []
-        async for msg in channel.history(limit=None, oldest_first=True):
-            timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            content = msg.content if msg.content else "[Sin texto / Embed / Archivo]"
-            messages.append(f"[{timestamp}] {msg.author.name} ({msg.author.id}): {content}")
+        try:
+            async for msg in channel.history(limit=500, oldest_first=True):
+                timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                content = msg.content if msg.content else "[Sin texto / Embed / Archivo]"
+                messages.append(f"[{timestamp}] {msg.author.name} ({msg.author.id}): {content}")
+        except Exception as e:
+            messages.append(f"Error generando mensajes: {e}")
 
         transcript_text = f"=== TRANSCRIPCIÓN DE TICKET: {channel.name} ===\n"
         transcript_text += f"Servidor: {interaction.guild.name}\n"
@@ -129,7 +132,6 @@ class TicketCloseView(discord.ui.View):
         transcript_text += "=" * 50 + "\n\n"
         transcript_text += "\n".join(messages)
 
-        # Obtener el creador del ticket desde el topic
         topic = channel.topic or ""
         ticket_owner = None
         if "GUMBOT_OWNER:" in topic:
@@ -139,7 +141,7 @@ class TicketCloseView(discord.ui.View):
             except Exception:
                 pass
 
-        # 1. Enviar transcripción al MD del usuario
+        # 1. Enviar MD al usuario
         if ticket_owner:
             try:
                 buffer_user = io.BytesIO(transcript_text.encode("utf-8"))
@@ -150,18 +152,16 @@ class TicketCloseView(discord.ui.View):
                     description=(
                         f"¡Hola **{ticket_owner.name}**!\n\n"
                         f"Tu ticket **#{channel.name}** en **{interaction.guild.name}** ha sido cerrado y eliminado.\n"
-                        "Adjunto a este mensaje encontrarás la transcripción completa de la conversación."
+                        "Adjunto encontrarás la transcripción completa de la conversación."
                     ),
                     color=discord.Color.purple()
                 )
                 embed_md.set_footer(text="GUMBOT • Gracias por contactarnos 🍬")
                 await ticket_owner.send(embed=embed_md, file=file_user)
-            except discord.Forbidden:
-                print(f"⚠️ No se pudo enviar el MD a {ticket_owner.name} (MDs deshabilitados).")
             except Exception as e:
-                print(f"❌ Error enviando MD: {e}")
+                print(f"⚠️ No se pudo enviar MD a {ticket_owner.name}: {e}")
 
-        # 2. Enviar transcripción al canal #bot-logs
+        # 2. Enviar copia a #bot-logs
         log_channel = discord.utils.get(interaction.guild.text_channels, name="bot-logs")
         if log_channel:
             buffer_logs = io.BytesIO(transcript_text.encode("utf-8"))
@@ -253,4 +253,187 @@ class TicketSelect(discord.ui.Select):
         owner_role  = guild.get_role(OWNER_ROLE_ID)
         admin_role  = guild.get_role(ADMIN_ROLE_ID)
         mod_role    = guild.get_role(MOD_ROLE_ID)
-        helper_role = guild.get_role(HELPER_
+        helper_role = guild.get_role(HELPER_ROLE_ID)
+
+        mentions = [member.mention]
+
+        if tipo == "compras":
+            if owner_role:
+                overwrites[owner_role] = discord.PermissionOverwrite(
+                    view_channel=True, send_messages=True, read_message_history=True
+                )
+                mentions.append(owner_role.mention)
+        else:
+            for role in [owner_role, admin_role, mod_role, helper_role]:
+                if role:
+                    overwrites[role] = discord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, read_message_history=True
+                    )
+
+            if tipo == "dudas":
+                if helper_role:
+                    mentions.append(helper_role.mention)
+            elif tipo == "bug":
+                if admin_role:
+                    mentions.append(admin_role.mention)
+                if mod_role:
+                    mentions.append(mod_role.mention)
+            elif tipo == "soporte":
+                if admin_role:
+                    mentions.append(admin_role.mention)
+                if mod_role:
+                    mentions.append(mod_role.mention)
+                if helper_role:
+                    mentions.append(helper_role.mention)
+
+        nombres = {
+            "soporte": "soporte",
+            "compras": "compras",
+            "dudas": "dudas",
+            "bug": "bug"
+        }
+
+        channel = await guild.create_text_channel(
+            name=f"ticket-{nombres[tipo]}-{member.name}".lower()[:90],
+            category=category,
+            overwrites=overwrites,
+            topic=f"GUMBOT_OWNER:{member.id}|CATEGORY:{tipo}"
+        )
+
+        embed = discord.Embed(
+            title="🍬 GUMBOT | Ticket de Atención",
+            description=(
+                f"¡Hola {member.mention}!\n\n"
+                f"Tu solicitud de **{tipo.upper()}** ha sido registrada exitosamente.\n"
+                "El equipo asignado responderá lo antes posible.\n\n"
+                "📌 **Detalla tu solicitud con la mayor cantidad de información.**"
+            ),
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text="GUMBOT • Sistema de Soporte Automático")
+
+        await channel.send(
+            content=" ".join(mentions),
+            embed=embed,
+            view=TicketCloseView()
+        )
+
+        await interaction.followup.send(
+            f"🎉 Tu ticket ha sido creado: {channel.mention}",
+            ephemeral=True
+        )
+
+
+class TicketPanel(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(TicketSelect())
+
+
+class Gumbot(commands.Bot):
+    async def setup_hook(self):
+        self.add_view(TicketPanel())
+        self.add_view(TicketCloseView())
+
+
+bot = Gumbot(
+    command_prefix="!",
+    intents=intents
+)
+
+
+@bot.event
+async def on_ready():
+    print(f"🍬 GUMBOT conectado como {bot.user}")
+    print("🎫 Sistema activo")
+
+
+@bot.event
+async def on_member_join(member: discord.Member):
+    if MEMBER_ROLE_ID != 0:
+        role = member.guild.get_role(MEMBER_ROLE_ID)
+        if role:
+            try:
+                await member.add_roles(role)
+                print(f"✅ Rol asignado a {member.name}")
+            except Exception as e:
+                print(f"❌ Error al asignar rol: {e}")
+
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    if message.author.bot or not message.guild:
+        return
+
+    log_channel = discord.utils.get(message.guild.text_channels, name="bot-logs")
+    if not log_channel:
+        return
+
+    await asyncio.sleep(1)
+    deleter = message.author
+
+    try:
+        async for entry in message.guild.audit_logs(action=discord.AuditLogAction.message_delete, limit=1):
+            if entry.target.id == message.author.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 5:
+                deleter = entry.user
+                break
+    except Exception:
+        pass
+
+    embed = discord.Embed(
+        title="🗑️ Mensaje Eliminado",
+        color=discord.Color.red()
+    )
+    embed.add_field(name="Autor original:", value=f"{message.author.mention} (`{message.author.id}`)", inline=True)
+    embed.add_field(name="Eliminado por:", value=f"{deleter.mention} (`{deleter.id}`)", inline=True)
+    embed.add_field(name="Canal:", value=message.channel.mention, inline=False)
+
+    if message.content:
+        embed.add_field(name="Contenido:", value=message.content[:1024], inline=False)
+
+    embed.set_footer(text=f"GUMBOT Logs • ID: {message.id}")
+    await log_channel.send(embed=embed)
+
+
+@bot.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    if before.author.bot or not before.guild or before.content == after.content:
+        return
+
+    log_channel = discord.utils.get(before.guild.text_channels, name="bot-logs")
+    if log_channel:
+        embed = discord.Embed(
+            title="✏️ Mensaje Editado",
+            description=f"**Autor:** {before.author.mention} (`{before.author.id}`)\n**Canal:** {before.channel.mention}",
+            color=discord.Color.gold()
+        )
+        embed.add_field(name="Antes:", value=before.content[:1024], inline=False)
+        embed.add_field(name="Después:", value=after.content[:1024], inline=False)
+        embed.set_footer(text=f"GUMBOT Logs • ID: {before.id}")
+        await log_channel.send(embed=embed)
+
+
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def panel(ctx):
+    embed = discord.Embed(
+        title="🍬 GUMBOT | Centro de Atención",
+        description=(
+            "✨ **¿En qué podemos ayudarte hoy?**\n\n"
+            "Selecciona una opción del menú desplegable para abrir un ticket privado:\n\n"
+            "🍭 **Soporte general**\n"
+            "Asistencia técnica o general con el servidor.\n\n"
+            "💎 **Compras & Tienda**\n"
+            "Consultas sobre rangos, VIPs y pagos (Atención por Owner).\n\n"
+            "🔮 **Dudas & Consultas**\n"
+            "Preguntas rápidas e información general.\n\n"
+            "👾 **Reportar un Bug**\n"
+            "Informar fallos o inconvenientes."
+        ),
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="GUMBOT • Elige una opción abajo 🍬")
+    await ctx.send(embed=embed, view=TicketPanel())
+
+
+bot.run(os.getenv("DISCORD_TOKEN"))

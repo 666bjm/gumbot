@@ -16,13 +16,12 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
-    # use_reloader=False es clave para evitar que la app se reinicie/cierre en Render
     app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 threading.Thread(target=run_web, daemon=True).start()
 
 # ========== CONFIGURACIÓN DE IDS Y ROLES ==========
-TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría de Discord si deseas una específica
+TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría de Discord si usas una
 
 MEMBER_ROLE_ID = 1566149617995874428
 OWNER_ROLE_ID  = 1566149617995874432
@@ -105,76 +104,4 @@ class TicketCloseView(discord.ui.View):
         has_permission = any(r in user_roles for r in staff_roles) or interaction.user.guild_permissions.manage_channels
 
         if not has_permission:
-            await interaction.followup.send("🚫 Solo el Staff puede eliminar tickets.", ephemeral=True)
-            return
-
-        await interaction.followup.send("📄 Generando transcripción y eliminando en 5 segundos...", ephemeral=True)
-
-        # ========== GENERACIÓN DE TRANSCRIPCIÓN ==========
-        messages = []
-        try:
-            async for msg in channel.history(limit=500, oldest_first=True):
-                timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                content = msg.content if msg.content else "[Sin texto / Embed / Archivo]"
-                messages.append(f"[{timestamp}] {msg.author.name} ({msg.author.id}): {content}")
-        except Exception as e:
-            messages.append(f"Error registrando mensajes: {e}")
-
-        transcript_text = f"=== TRANSCRIPCIÓN DE TICKET: {channel.name} ===\n"
-        transcript_text += f"Servidor: {interaction.guild.name}\n"
-        transcript_text += f"Fecha de eliminación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        transcript_text += "=" * 50 + "\n\n"
-        transcript_text += "\n".join(messages)
-
-        topic = channel.topic or ""
-        ticket_owner = None
-        if "GUMBOT_OWNER:" in topic:
-            try:
-                owner_id = int(topic.split("GUMBOT_OWNER:")[1].split("|")[0])
-                ticket_owner = interaction.guild.get_member(owner_id)
-            except Exception:
-                pass
-
-        # 1. Enviar por Mensaje Directo al creador
-        if ticket_owner:
-            try:
-                buffer_user = io.BytesIO(transcript_text.encode("utf-8"))
-                file_user = discord.File(buffer_user, filename=f"transcripcion-{channel.name}.txt")
-                
-                embed_md = discord.Embed(
-                    title="📜 Copia de tu Ticket de Soporte",
-                    description=(
-                        f"¡Hola **{ticket_owner.name}**!\n\n"
-                        f"Tu ticket **#{channel.name}** en **{interaction.guild.name}** ha sido cerrado y eliminado.\n"
-                        "Adjunto encontrarás la transcripción completa de la conversación."
-                    ),
-                    color=discord.Color.from_rgb(155, 89, 182)
-                )
-                embed_md.set_footer(text="GUMBOT • Gracias por contactarnos 🍬")
-                await ticket_owner.send(embed=embed_md, file=file_user)
-            except Exception as e:
-                print(f"⚠️ No se pudo enviar MD a {ticket_owner.name}: {e}")
-
-        # 2. Guardar en #bot-logs
-        log_channel = discord.utils.get(interaction.guild.text_channels, name="bot-logs")
-        if log_channel:
-            buffer_logs = io.BytesIO(transcript_text.encode("utf-8"))
-            file_logs = discord.File(buffer_logs, filename=f"transcript-{channel.name}.txt")
-            
-            embed_log = discord.Embed(
-                title="📜 Transcripción de Ticket Eliminado",
-                description=(
-                    f"**Canal:** `{channel.name}`\n"
-                    f"**Creador del ticket:** {ticket_owner.mention if ticket_owner else 'Desconocido'}\n"
-                    f"**Eliminado por:** {interaction.user.mention}"
-                ),
-                color=discord.Color.blue()
-            )
-            embed_log.set_footer(text=f"GUMBOT Logs • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            await log_channel.send(embed=embed_log, file=file_logs)
-
-        await asyncio.sleep(5)
-        await channel.delete()
-
-
-class TicketSelect(discord.ui
+            await interaction.followup.send("🚫 Solo el Staff puede eliminar tickets

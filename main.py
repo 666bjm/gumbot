@@ -182,25 +182,25 @@ class TicketSelect(discord.ui.Select):
             discord.SelectOption(
                 label="Soporte general",
                 description="Asistencia técnica o general con el servidor",
-                emoji="🟡",
+                emoji=discord.PartialEmoji.from_str("<:soporte:1568152222884298884>"),
                 value="soporte"
             ),
             discord.SelectOption(
                 label="Compras & Tienda",
                 description="Rangos, VIPs y métodos de pago (Exclusivo Owner)",
-                emoji="🟣",
+                emoji=discord.PartialEmoji.from_str("<:compras:1568152251116290150>"),
                 value="compras"
             ),
             discord.SelectOption(
                 label="Dudas & Consultas",
                 description="Preguntas e información general con el Staff",
-                emoji="🔴",
+                emoji=discord.PartialEmoji.from_str("<:dudas:1568152274943877171>"),
                 value="dudas"
             ),
             discord.SelectOption(
                 label="Reportar un Bug",
                 description="Notificar fallos o problemas del juego",
-                emoji="🔵",
+                emoji=discord.PartialEmoji.from_str("<:bugs:1568152655354667068>"),
                 value="bug"
             )
         ]

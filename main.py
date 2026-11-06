@@ -21,7 +21,7 @@ def run_web():
 threading.Thread(target=run_web, daemon=True).start()
 
 # ========== CONFIGURACIÓN DE IDS Y ROLES ==========
-TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría de Discord si usas una
+TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría si usas una
 
 MEMBER_ROLE_ID = 1566149617995874428
 OWNER_ROLE_ID  = 1566149617995874432
@@ -38,6 +38,56 @@ intents.message_content = True
 intents.members = True
 
 
+# ========== SISTEMA DE VALORACIÓN POR ESTRELLAS ==========
+class RatingView(discord.ui.View):
+    def __init__(self, ticket_name: str, guild: discord.Guild):
+        super().__init__(timeout=86400) # 24 horas para responder
+        self.ticket_name = ticket_name
+        self.guild = guild
+
+    async def send_rating_log(self, interaction: discord.Interaction, rating: int, emoji_str: str):
+        log_channel = discord.utils.get(self.guild.text_channels, name="bot-logs")
+        if log_channel:
+            embed = discord.Embed(
+                title="⭐ Nueva Valoración de Atención",
+                description=(
+                    f"**Ticket:** `{self.ticket_name}`\n"
+                    f"**Usuario:** {interaction.user.mention} (`{interaction.user.id}`)\n"
+                    f"**Calificación:** {emoji_str} ({rating}/5)"
+                ),
+                color=discord.Color.gold()
+            )
+            embed.set_footer(text=f"GUMBOT Logs • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            await log_channel.send(embed=embed)
+
+        await interaction.response.send_message(
+            f"💖 ¡Gracias por tu valoración de {rating} estrella(s)! Tu opinión nos ayuda a mejorar.",
+            ephemeral=True
+        )
+        self.stop()
+
+    @discord.ui.button(label="1 ⭐", style=discord.ButtonStyle.secondary, custom_id="rate_1")
+    async def rate_1(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.send_rating_log(interaction, 1, "⭐")
+
+    @discord.ui.button(label="2 ⭐", style=discord.ButtonStyle.secondary, custom_id="rate_2")
+    async def rate_2(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.send_rating_log(interaction, 2, "⭐⭐")
+
+    @discord.ui.button(label="3 ⭐", style=discord.ButtonStyle.secondary, custom_id="rate_3")
+    async def rate_3(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.send_rating_log(interaction, 3, "⭐⭐⭐")
+
+    @discord.ui.button(label="4 ⭐", style=discord.ButtonStyle.secondary, custom_id="rate_4")
+    async def rate_4(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.send_rating_log(interaction, 4, "⭐⭐⭐⭐")
+
+    @discord.ui.button(label="5 ⭐", style=discord.ButtonStyle.success, custom_id="rate_5")
+    async def rate_5(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.send_rating_log(interaction, 5, "⭐⭐⭐⭐⭐")
+
+
+# ========== VISTA DE CONTROL DEL TICKET (CERRAR / ELIMINAR) ==========
 class TicketCloseView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -134,7 +184,7 @@ class TicketCloseView(discord.ui.View):
             except Exception:
                 pass
 
-        # 1. Enviar por Mensaje Directo al creador
+        # 1. Enviar MD al creador con la Transcripción + Encuesta de Calificación ⭐
         if ticket_owner:
             try:
                 buffer_user = io.BytesIO(transcript_text.encode("utf-8"))
@@ -145,16 +195,22 @@ class TicketCloseView(discord.ui.View):
                     description=(
                         f"¡Hola **{ticket_owner.name}**!\n\n"
                         f"Tu ticket **#{channel.name}** en **{interaction.guild.name}** ha sido cerrado y eliminado.\n"
-                        "Adjunto encontrarás la transcripción completa de la conversación."
+                        "Adjunto encontrarás la transcripción completa de la conversación.\n\n"
+                        "⭐ **¿Cómo calificarías la atención recibida por nuestro Staff?**\n"
+                        "Por favor, selecciona una opción abajo para enviar tu opinión:"
                     ),
                     color=discord.Color.from_rgb(155, 89, 182)
                 )
-                embed_md.set_footer(text="GUMBOT • Gracias por contactarnos 🍬")
-                await ticket_owner.send(embed=embed_md, file=file_user)
+                embed_md.set_footer(text="GUMBOT • Gracias por formar parte de GUMSMP 🍬")
+                await ticket_owner.send(
+                    embed=embed_md, 
+                    file=file_user, 
+                    view=RatingView(channel.name, interaction.guild)
+                )
             except Exception as e:
                 print(f"⚠️ No se pudo enviar MD a {ticket_owner.name}: {e}")
 
-        # 2. Guardar en #bot-logs
+        # 2. Guardar transcripción en #bot-logs
         log_channel = discord.utils.get(interaction.guild.text_channels, name="bot-logs")
         if log_channel:
             buffer_logs = io.BytesIO(transcript_text.encode("utf-8"))
@@ -176,6 +232,7 @@ class TicketCloseView(discord.ui.View):
         await channel.delete()
 
 
+# ========== MENÚ DESPLEGABLE CON EMOJIS DE CRISTALES ==========
 class TicketSelect(discord.ui.Select):
     def __init__(self):
         options = [
@@ -339,6 +396,10 @@ bot = Gumbot(
 async def on_ready():
     print(f"🍬 GUMBOT conectado como {bot.user}")
     print("🎫 Sistema de tickets activo")
+    
+    # 🎮 Estado personalizado dinámico en el perfil del bot
+    activity = discord.Game(name="gumsmp.lat | !panel 🍬")
+    await bot.change_presence(status=discord.Status.online, activity=activity)
 
 
 @bot.event

@@ -12,16 +12,17 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "GUMBOT activo 24/7"
+    return "GUMBOT activo 24/7 en Render"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+    # use_reloader=False es clave para evitar que la app se reinicie/cierre en Render
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
 
 threading.Thread(target=run_web, daemon=True).start()
 
 # ========== CONFIGURACIÓN DE IDS Y ROLES ==========
-TICKET_CATEGORY_ID = 0  # Coloca aquí la ID de la categoría de Discord si usas una
+TICKET_CATEGORY_ID = 0  # Reemplaza por el ID de la categoría de Discord si deseas una específica
 
 MEMBER_ROLE_ID = 1566149617995874428
 OWNER_ROLE_ID  = 1566149617995874432
@@ -29,7 +30,7 @@ ADMIN_ROLE_ID  = 1567975793311617154
 MOD_ROLE_ID    = 1567976143611502696
 HELPER_ROLE_ID = 1567976303951347722
 
-# 🔗 REEMPLAZA ESTE ENLACE CON LA URL DIRECTA DE TU GIF/IMAGEN DE GUMSMP TICKETS
+# 🔗 ENLACE A TU GIF / IMAGEN DEL BANNER DE GUMSMP TICKETS
 BANNER_TICKETS_URL = "https://cdn.discordapp.com/attachments/TU_CANAL/TU_BANNER.gif"
 # ==================================================
 
@@ -62,10 +63,7 @@ class TicketCloseView(discord.ui.View):
         topic = channel.topic or ""
 
         if "GUMBOT_OWNER:" not in topic:
-            await interaction.followup.send(
-                "🚫 Este no es un ticket válido.",
-                ephemeral=True
-            )
+            await interaction.followup.send("🚫 Este no es un ticket válido.", ephemeral=True)
             return
 
         owner_id = int(topic.split("GUMBOT_OWNER:")[1].split("|")[0])
@@ -75,14 +73,10 @@ class TicketCloseView(discord.ui.View):
         has_staff_permission = any(r in user_roles for r in staff_roles) or interaction.user.guild_permissions.manage_channels
 
         if interaction.user.id != owner_id and not has_staff_permission:
-            await interaction.followup.send(
-                "🚫 No tienes permiso para cerrar este ticket.",
-                ephemeral=True
-            )
+            await interaction.followup.send("🚫 No tienes permiso para cerrar este ticket.", ephemeral=True)
             return
 
         owner = interaction.guild.get_member(owner_id)
-
         if owner:
             await channel.set_permissions(owner, send_messages=False)
 
@@ -111,13 +105,10 @@ class TicketCloseView(discord.ui.View):
         has_permission = any(r in user_roles for r in staff_roles) or interaction.user.guild_permissions.manage_channels
 
         if not has_permission:
-            await interaction.followup.send(
-                "🚫 Solo el Staff puede eliminar tickets.",
-                ephemeral=True
-            )
+            await interaction.followup.send("🚫 Solo el Staff puede eliminar tickets.", ephemeral=True)
             return
 
-        await interaction.followup.send("📄 Generando transcripción y eliminando canal en 5 segundos...", ephemeral=True)
+        await interaction.followup.send("📄 Generando transcripción y eliminando en 5 segundos...", ephemeral=True)
 
         # ========== GENERACIÓN DE TRANSCRIPCIÓN ==========
         messages = []
@@ -127,7 +118,7 @@ class TicketCloseView(discord.ui.View):
                 content = msg.content if msg.content else "[Sin texto / Embed / Archivo]"
                 messages.append(f"[{timestamp}] {msg.author.name} ({msg.author.id}): {content}")
         except Exception as e:
-            messages.append(f"Error generando mensajes: {e}")
+            messages.append(f"Error registrando mensajes: {e}")
 
         transcript_text = f"=== TRANSCRIPCIÓN DE TICKET: {channel.name} ===\n"
         transcript_text += f"Servidor: {interaction.guild.name}\n"
@@ -144,7 +135,7 @@ class TicketCloseView(discord.ui.View):
             except Exception:
                 pass
 
-        # 1. Enviar MD al usuario
+        # 1. Enviar por Mensaje Directo al creador
         if ticket_owner:
             try:
                 buffer_user = io.BytesIO(transcript_text.encode("utf-8"))
@@ -164,7 +155,7 @@ class TicketCloseView(discord.ui.View):
             except Exception as e:
                 print(f"⚠️ No se pudo enviar MD a {ticket_owner.name}: {e}")
 
-        # 2. Enviar copia a #bot-logs
+        # 2. Guardar en #bot-logs
         log_channel = discord.utils.get(interaction.guild.text_channels, name="bot-logs")
         if log_channel:
             buffer_logs = io.BytesIO(transcript_text.encode("utf-8"))
@@ -179,4 +170,11 @@ class TicketCloseView(discord.ui.View):
                 ),
                 color=discord.Color.blue()
             )
-            embed_log.set_
+            embed_log.set_footer(text=f"GUMBOT Logs • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            await log_channel.send(embed=embed_log, file=file_logs)
+
+        await asyncio.sleep(5)
+        await channel.delete()
+
+
+class TicketSelect(discord.ui
